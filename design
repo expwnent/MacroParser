@@ -1,0 +1,566 @@
+lots to consider
+
+allow each macro private variables with $0.varname
+allow each macro its own disjoint set of variables
+parse many nonterminals simultaneously
+
+
+instead of Trie [ByteString] use Trie [Maybe ByteString]
+
+even things like getVar should be error-free
+use a parseString that catches things
+
+
+===============
+2014/6/5 0015
+
+TODO: better escape sequences
+
+pull mechanics
+
+A -> B C
+
+Pull([A]) -> <rule number> <unique name> [A] <quoted name of B child> <quoted name of C child>
+side effect: &0 = rule number of production used, &1 = name of B child, &2 = name of C child
+
+A ->1 B
+A ->2 A + B
+B ->1 C
+B ->2 B * C
+C ->1 (A)
+C ->2 number
+
+Parse([[A]], [1+1])
+ParseOr(Parse([[B]],[1+1]),Parse([[A]+[B]],[1+1]))
+ParseOr(ParseOr(Parse([[C]],[1+1]),Parse([[B]*[C]],[1+1])),Parse([[A]+[B]],[1+1]))
+ParseOr(ParseOr(ParseOr(Parse([Number],[1+1]),Parse([[C]],[1+1])),Parse([[B]*[C]],[1+1])),Parse([[A]+[B]],[1+1]))
+
+TODO: output quoted instructions to allow parallel execution
+
+Parse([[A]],[1+1])
+PushDef([_str], [1+1]) --necessary to prevent relentless duplication of input string
+ParseOr(Parse([[B]],[0]),Parse([[A]+[B]],[0]))
+ParseOr(Parse([[B]],[0]),ParseWithTail([[A]],[0],[+[B]]))
+ParseOr(Parse([[C]],[0]),ParseWithTail(ParseOr(Parse([[B]],[0]),Parse([[A]+[B]] TODO
+
+let's keep it right-associative for convenience
+
+PushDef([_str], [1+1])
+Parse([[A]],[0])
+ParseOr(Parse([[B]],[0]),ParseTail([[B]], [0], [+[A]]))
+ParseOr(ParseOr(Parse([[C]],[0]),ParseTail([[C]],[0],[*[B]])),ParseTail TODO
+
+A  -> B A'
+A' ->
+A' -> +A
+B  -> C B'
+B' ->
+B' -> *B
+C  -> \(A\)
+C  -> Number
+
+PushDef([_str],[1+1])
+Parse([[A]],[0])
+ParseOr(ParseTail([[B]],[0],[[A']]))
+ParseOr(ParseTail(ParseOr(ParseTail(Parse([[C]],[0]),[[B']])),[[A']]))
+ParseOr(ParseTail(ParseOr(ParseTail(ParseOr(ParseTail(Parse([\(],[0]),[[A]\)]),Parse([[Number]],[0])),[[B']])),[[A']]))
+ParseOr(ParseTail(ParseOr(ParseTail(ParseOr(ParseTail([_parseFail],[[A]\\]),[[node0]]),[[B']])),[[A']]))
+ParseOr(ParseTail(ParseOr(ParseTail(ParseOr([_parseFail],[[node0]]),[[B']])),[[A']]))
+ParseOr(ParseTail(ParseOr(ParseTail([2[node0]],[[B']])),[[A']]))
+ParseOr(ParseTail(ParseOr(Parse([[B']],[1])),[[A']]))
+ParseOr(ParseTail(ParseOr(ParseOr(ParseTail(Parse([*],[1]),[[B]]),Parse([],[1]))),[[A']]))
+ParseOr(ParseTail(ParseOr(ParseOr(ParseTail([_parseFail],[[B]]),[_parseEpsilon])),[[A']]))
+ParseOr(ParseTail(ParseOr(ParseOr([_parseFail],[_parseEpsilon])),[[A']]))
+ParseOr(ParseTail(ParseOr([2[node1]]),[[A']]))
+ParseOr(ParseTail([1[node2]],[[A']]))
+ParseOr(Parse([[A']],[1]))
+ParseOr(ParseOr(ParseTail(Parse([+],[1]),[[A]]),Parse([],[1])))
+ParseOr(ParseOr(ParseTail([[node3]],[[A]]),[_parseEpsilon]))
+ParseOr(ParseOr(Parse([[A]],2),[_parseEpsilon]))
+...
+ParseOr(ParseOr([[node_n]],[_parseEpsilon]))
+ParseOr(ParseOr([1[node_n]]))
+ParseOr([[node_n+1]])
+[1[node_n+1]]
+[[node_n+2]]
+
+--
+PushDef([_str],[1+1])dnl
+PushDef([index],[0])dnl
+DelSym([job])dnl just in case: technically shouldn't be here
+Suppress(Parse([[A]],[index]))dnl
+Compute([job0])dnl
+PopDef([_str])dnl
+PopDef([index])dnl
+
+Parse([[A]],[index]):
+PushDef([n0],GenSym([job]))dnl
+Suppress(GenSym([job]))dnl
+PushDef([n1],Inc(n0))dnl
+PushDef([j0],[job]n0)dnl
+PushDef([j1],[job]n1)dnl
+PushDef([j0q],Quote(j0,2))dnl
+PushDef([j1q],Quote(j1,2))dnl
+SetDef(j0q,[WithDefs]([nodeIndex],nodeIndex,...,[SetDef(j0q,[Delay(j1q,[SetDef([Node]]]nodeIndex,nodeIndex[[ [[A]] result)]]nodeIndex[[])])])[PushQueueR]([jobs],j0q)]))dnl
+
+SetDef(j1q,[PushDef]([j0q],j0q)[PushDef]([index],index)[PushDef([result],Parse([[B]],index,[[A']]))PushQueueR([jobs],[j0q(result[]PopDef([result]))])PopDef([j0q])PopDef([index])])dnl
+SetDef(j0q,[WithDefs]([nodeIndex],nodeIndex,j1q,j1q,[child],[$1],[SetDef([Node]nodeIndex,nodeIndex [[A]] child)nodeIndex]))dnl
+PushQueueR([jobs],j1q)dnl
+
+dnl I want Parse to schedule (do next task then make node), then return the index of the new node
+dnl job1: next task
+dnl job0: queue(job1 Wait(job1 makeNode))
+SetDef([job1],[PushDef]([result],[Parse]([[[B]]],index,[[[A']]]))[PushQueueR]([jobs],[job0]([result][PopDef]([result])))))dnl
+SetDef([job0],[SetDef]([[Node]]nodeIndex, [Quote([$1],2) [A] Quote($1,2)])[Quote]([[Node]]nodeIndex,2))
+
+SetDef([Node]nodeIndex,[IfElse](EvaluateString([job1]),))dnl
+-
+SetDef([job1],[PushDef]([result],[Parse]([[[B]]],index,[[[A']]]))[PushQueueR]([jobs],[job0]([result][PopDef]([result])))))dnl
+SetDef([job0],[SetDef]([[Node]]nodeIndex, [Quote([$1],2) [A] Quote($1,2)])[Quote]([[Node]]nodeIndex,2))
+-
+
+Define([job]n1,[Parse]([[[B]],]index[,[[A']]]
+Define([job]n1,[SetDef](j1q,[Parse]([[[B]],]index[,[[A']]]))[PushQueueR]([jobs],j1q))dnl
+Define([job]n0,[Wait](w1,[ParseOr](w1)))dnl
+PushQueueR([jobs],Quote([work]n0,2))dnl
+PushQueueR([jobs],Quote([work]n1,2))dnl
+Quote([work]n0)dnl bad on recursion. only useful for top level
+
+PushQueueL([jobs],Quote([work]n0,2))dnl
+PushQueueL([jobs],_Quote(work0,2))dnl
+PushQueueL([jobs],[[work0]])dnl
+_PushQueueL(jobs,[work0])dnl
+
+Compute([work0]):
+IfElse(isDone([work0]),1,[work0],dnl
+PushDef([jobs'],jobs)dnl
+ClearQueue([jobs])dnl
+For(AllQueue([jobs']),[Define($1,EvaluateString($1))]
+)dnl
+
+dnl also consider:
+dnl Define([work]n1,[PushDef]([index],index)[Parse([[B]],index[]PopDef([index]),[[A']])])dnl
+dnl Define([work]n,WithDef([Parse([[B]],index,[[A']])],[index],index))dnl
+dnl Define([work]n,[Parse]([[[B]],]index[,[[A']]]))dnl
+---
+
+Parse([[A]]):
+PushDef([n0],GenSym([job]))dnl
+PushDef([j0],[job]n0)dnl
+PushDef([j0q],\[[job]n0\])dnl
+SetDef(j0q,[Parse([[B]],[[A']])])dnl
+PushDef([n1],GenSym([job]))dnl
+PushDef([j1],[job]n1)dnl
+PushDef([j1q],\[[job]n1\])dnl
+PushDef([nodeIndex],GenSym([node]))dnl
+SetDef(j1q,[Wait(j0q,[SetDef([node]nodeIndex,nodeIndex [A] result)SetDef([result],nodeIndex)])])dnl
+SetDef(j0q,j0[]j1q)dnl
+PushQueueR([jobs],n0)dnl
+SetDef([isNode])dnl
+SetDef([result],n1)dnl
+PopDefs([n0],[j0],[j0q],[n1],[j1],[j1q],[nodeIndex])dnl
+
+SetDef([Wait],
+ [WithDefs([base],[$1],[after],[$2],
+  [IfElse(isNode,1,
+   [after],
+   [WithDefs([temp],[job]result,[SetDef([job]result,[temp][Wait([base],[after])])])]
+)])])
+
+
+=================
+A->B
+A->C
+
+Parse([A]) {
+ PushDef([n0],[1])
+ PushDef([j0],[job1])
+ PushDef([j0q],[[job1]])
+ PushDef([n1],[2])
+ PushDef([j1],[job2])
+ PushDef([j1q],[[job2]])
+ PushDef([nodeIndex],[1])
+ SetDef([job1],WithContext([c1],[Parse([B])]))
+ SetDef([job2],WithContext([c2],[Parse([C])]))
+ PushDef([c1],MakeContext)
+ PushDef([c2],MakeContext)
+ SetDef([[job3]],[WaitAny([SetDef([node]nodeIndex,nodeIndex [A] result)SetDef([result],nodeIndex)PopDefs([n0],[j0],[j0q],[n1],[j1],[j1q],[nodeIndex],[job1],[job2],context[c1],context[c2])],[job1],[job2])])
+ PushQueueR([jobs],[job3])
+ SetDef([isNode])
+ SetDef([result],3)
+ PopDefs([n0],[j0],[j0q],[n1],[j1],[j1q],[nodeIndex],
+}
+
+WaitAny([after],[c1],[j1],[c2],[j2]) {
+ PushDef([done],PushContext([c1])IfElse([isNode],1,1,[isError],1,-1,0)PopContext)
+ IfElse(done,-1,[PopDef([done])DeleteContext([c1])WaitAny([after],[c2],[j2])],
+  done,1,[PopDef([done])AbsorbContext([c1])DeleteContext([c2])after],
+  [PopDef([done])WaitAny([after],[c2],[j2],[c1],InContext([c1],[DoJob]))])
+}
+WaitAny([after],[c1],[j1]) {
+ PushDef([done],InContext([c1],[IfElse([isError],1,-1,[isNode],1,1,0)]))
+ IfElse([done],-1,[PopDef([done])SetDef([isError],1)SetDef([result],[_parseError])SetDef([isNode],1)]result,
+  [done],1,[PopDef([done])AbsorbContext([c1])after],
+  [PopDef([done])WaitAny([after],[c1],InContext([c1],[DoJob]))]
+  )
+}
+WaitAny([after],[queue]) {
+ IfElse(emptyQueue([queue]),1,[SetDef([isError],1)SetDef([result],[_parseError])SetDef([isNode],1)],
+  [PushDef([car],queueCar([queue]))PushDef([cdr],queueCdr([queue]))PushDef([c1],get1(processPair([car])))PushDef([j1],get2(processPair([car])))PushDef([done],InContext([c1],[IfElse([isError],1,-1,[isDone],1,1,0)])dnl
+IfElse([done],-1,[PopDef([done])DeleteContext([c1])WaitAny([after],cdr)PopDefs([car],[cdr])],
+ [done],1,[PopDef([done])DeleteAllQueue(cdr)AbsorbContext([c1])after[]],
+ [PopDef([done])WaitAny([after],queuePushR([queue],([c1], [InContext([c1],[DoJob])]))
+}
+
+---
+A -> B C
+
+Parse([[A]]) {
+ SetDef([job1],[Wait([Parse([B])],[PushDef([child1],result)PopDef([result])Wait([Parse([C])],[PushDef([child2],result)PopDef([result])SetDef([node]nodeIndex,nodeIndex [A] child1 child2)SetDef([result],nodeIndex)PopDefs([nodeIndex],[child1],[child2])])])])
+}
+
+ParseList([queue],[nonterminals]) {
+ IfElse(queueNull([queue]),1,[PushDefs([isError],,[result],nonterminals)],
+  [PushCarCdr(queue)ParseOne([car])
+   IfElse(
+    [isError],1,[PopDefs([car],[cdr])],
+    [ParseList(cdr,QueuePushR(nonterminals,[ ]result)PopDefs([car],[cdr],[result]))])])
+}
+
+--a queue of encapsulated partial evaluations
+--step through queue until end of queue
+--keep walking through queue as many times as necessary
+--if you find someone with IsError in the queue, delete them from the queue
+--if the first member of the queue is done, that's your answer
+SetDef([ParseOne],
+[IfElse(length(Productions([$1])),0,[PushDefs([isError],1,[result],[_parseError],[isDone],1)],[
+PushDef([contextN],[context]GenSym([context]))
+PushDef([dumbN],GenSym([dumb]))
+SetDef([dumb]dumbN,1)
+MakeContext(contextN,[PopDef([dumb]dumbN)])
+IfElse(Evaluate([dumb]dumbN),,,[
+PopDefs([dumb]dumbN,[dumbN])
+Wait(ParseOneBuildQueue(Productions($1)),
+ [],
+ [ParseOneIterateQueueHelper])
+
+SetDef([ParseOneBuildQueue],[IfElse(
+ QueueNull($1),1,,
+ [PushCarCdr($1)
+  PushDef([contextM],[context]GenSym([context]))
+  CopyContext(contextM,contextN)
+  PushDef([head],[ParseList](PeekPop([car])))
+  PushDef([j1],SaveJob(MakeJob([InContext(PeekPop([contextM]),PeekPop([head]))])))
+  SetDef([nondetQueue],QueuePushR(nondetQueue,PeekPop([j1])))
+  ParseOneBuildQueue(PeekPop([cdr]))])])
+PushDef([ParseOneIterateQueue],[IfElse(QueueNull($1),1,[ParseOneIterateQueueHelper],
+ [PushCarCdr($1)
+  [IfElse(
+    Evaluate([job]car[Error]),1,,
+    Evaluate([job]car[Done]),1,[SetDef([nondetQueue],QueuePushR(nondetQueue,Evaluate([job]car[Done])))PopJobSaveData(car)],
+    [SetDef([nondetQueue],QueuePushR(nondetQueue,Evaluate([job]car)))])]
+  PopStuff
+PushDef([ParseOneIterateQueue],
+ [IfElse(QueueNull($1),1,[MakeEnqueueJob([ParseOneIterateQueueHelper])],
+  [PushCarCdr($1)IfElse(
+   IsError([car]),1,[PopVar([car])ParseOneIterateQueue(PeekPop([cdr]))],
+   IsDone([car]),1,[
+   
+   Wait(ParseOneIterateQueue(cdr[]PopDef([cdr])),
+    [PopDefs([car])PushDefs([isDone],1,[isError],1,[result],,)],
+    [])
+PushDef([iterateQueueHelper],
+ [IfElse(QueueNull(nondetQueue),1,[PushDefs([isDone],1,[isError],1,[result],,)],
+  [iterateQueue(nondetQueue[]SetDef([nondetQueue],EmptyQueue))])])
+
+
+Wait(buildQueue(Productions($1))[DeleteContext([contextN])PopVars([contextN],[buildQueue])],
+ [PushDefs([isError],1,[isDone],,)],
+ [
+
+--ParseList(queue,nonterminals)
+SetDef([ParseList],[IfElse(
+ QueueNull($1),1,[PushDefs([isError],,[result],QueueConcat($2),[isDone],1)],dnl
+[PushCarCdr(queue)dnl
+PushDef([j0q],\[[job]GenSym([job])\])dnl
+SetDef(j0q,[Wait([ParseOne(car[]PopDef([car]))],
+ [PopDefs([cdr],j0q,[j0q])],dnl
+ [ParseList(cdr[]PopDefs([cdr],j0q,[j0q]),QueuePushR(nonterminals,[ ]result[]PopDef([result])))])])
+SetDef([jobs],QueuePushR(jobs,j0q))
+
+Wait0([onDone],[onError]) {
+ IfElse(
+  isError[]PopDef([isError]),1,
+   [onError],
+  isDone[]PopDef([isDone]),1,
+   [onDone],
+  [PushDef([temp],Evaluate([job]result[]PopDef([result])))
+   PushDef([n],GenSym([job]))
+   SetDef([j1q],\[[job]n\])
+   SetDef(j1q,
+    [PopDefs(j1q,[j1q],[n])
+     temp[]PopDef([temp])
+     Wait0([onDone],[onError])])
+   SetDef([jobs],QueuePushR(jobs,j1q))])
+}
+define([Wait0],[IfElse(
+ isError[]PopDef([isError]),1,
+  [$2],
+ isDone[]PopDef([isDone]),1
+  [$1],
+ [PushDef([temp],Evaluate([job]result[]PopDef([result])))
+  SetDef([j1q],\[[job]GenSym([job])\])
+  SetDef(j1q,
+   [PopDefs(j1q,[j1q])
+    temp[]PopDef([temp])
+    Wait0([$1],[$2])])
+  SetDef([jobs],QueuePushR(jobs,j1q))])])
+define([Wait],[$1[]Wait0($2,$3)])
+
+--Wait(onError,onDone)
+SetDef([Wait],
+ [$1[]IfElse(
+  isError[]PopDef([isError]),1,
+   [$1],
+  isDone[]PopDef([isDone]),1,
+   [$2],
+  [WithDef([temp],result),PopDef([result])Succeed(MakeEnqueueJob([Wait([job]temp,[$1],[$2])]))])])
+
+SetDef([WaitFancy],
+ [$1[]IfElse(
+  PeekPop([isError]),1,[$1],
+  PeekPop([isDone]),1,[$2],
+  [$3])])
+
+SetDef([Succeed],[$1[]PushDefs([isDone],1,[isError],,)])
+
+SetDef([MakeJob],
+ [WithDef([n],GenSym([job]),[SetDefs([job]n,$1)n])])
+
+SetDef([EnqueueJobPop],[setDef([jobs],QueueAppendR(jobs,[job]$1)PopDef([job]$1))])
+SetDef([EnqueueJob],[setDef([jobs],QueueAppendR(jobs,[job]$1))])
+
+SetDef([MakeEnqueueJobPop],[EnqueueJobPop(MakeJob($1))])
+SetDef([MakeEnqueueJob],[EnqueueJob(MakeJob($1))])
+
+SetDef([SaveJob],[MakeEnqueueJobPop([job]$1[]SetDefs([job]$1[Result],result,[job]$1[Error],isError,[job]$1[Done],isDone))])
+
+TODO: lazy ifelse: enumerate one character at a time of each string to see whether they're equal
+TODO: m4: macro expand into commas, passed as argument
+TODO: quote2 vs quote
+TODO: preparse argument call tree to avoid iteratively walking over long string in f(f(f(f(x))))
+-----
+contexts
+
+TODO: parallel guessing + contexts
+
+guess/split based parser, contain side-effects
+
+push context, pop context, apply context
+context = MacroMap
+
+ParseState = [MacroMap]
+look up definition: just in current context
+
+=================
+2014/6/5
+
+I think this'll get a million times easier if I preparse and do operations on the parse tree instead of operations on the flat text.
+
+data Expression =
+  Quote Expression Expression
+| Literal Char Expression
+| Token String Expression
+| Macro String Expression
+| Null
+
+After the first parse, everything is either Quote or Literal except for one Null at the end
+
+process Null = Null
+process (Quote expr tail) = Token (expressionToString expr) (process tail)
+process (Token expr tail) = case expr of
+ (a:aL) -> process (Literal a (Token aL tail))
+ [] -> process tail
+process (Macro str tail) = processArgs str tail
+process (Literal c tail) = tryMacro stringEmpty macroDefs (Literal c tail) (Literal c tail)
+tryMacro str macros (Literal c tail) backup
+ | Trie.null macros = process backup
+ | otherwise =
+    tryMacro
+     (append str (stringSingleton c))
+     (trieReducer (stringSingleton c) macros)
+     tail
+     (if Trie.member emptyString macros then (Macro str (Literal c tail)) else backup)
+tryMacro str macros (Quote _ _) backup = process backup
+tryMacro str macros n@(Token _ _) backup = tryMacro str macros (process n) backup
+tryMacro str macros n@(Macro _ _) backup = error "shouldn't happen"
+tryMacro str macros n@(MacroArgs _ _ _) backup = error "shouldn't happen"
+tryMacro str macros Null backup = process backup
+
+processArgs str tail = do
+ h <- peekMaybe tail
+ definition <- getDef str
+ if isNothing h || fromJust h /= head "()" then do
+  return . process $ Token definition tail
+ else do
+  args <- parseArguments tail
+ where
+  parseArguments expr = do
+   (Literal _ expr2) <- parseLiteral '(' expr
+   (args,expr3) <- helper expr2
+   (Literal _ expr4) <- parseLiteral ')' expr3
+   let args' = (str:args)
+   forM_ (zip args' (map (\n->'$':show n) [0..])) $ \(arg,argName) -> do
+    pushDef(argName, arg)
+   pushDef("$#", show $ length args)
+   result <- process (Token definition expr4)
+   forM_ (zip args' (map (\n->'$':show n) [0..])) $ \(arg,argName) -> do
+    popDef(argName)
+   popDef("$#")
+   return result
+  helper expr = do
+   argAsdf <- parseUntilComma expr
+   (argL,expr2) <- case argAsdf of
+    Null -> return ([],expr)
+    Token arg1 expr2a -> ([arg1],expr2a)
+    Quote arg1 expr2b -> ([expressionToString arg1],expr2b)
+   f <- peekMaybe expr2
+   if isNothing f then do
+    error "shouldn't happen"
+   else don't
+   let f' = fromJust f
+   if f' == ')' then do
+    return (argL,expr2)
+   else if f' == ',' then do
+    expr3 <- pop expr2
+    (argL4,expr4) <- helper expr3
+    return (argL ++ argL4, expr3)
+   else error "Shouldn't happen"
+  parseUntilComma expr = do
+   f' <- peekMaybe expr
+   if isNothing f' then do error "shouldn't happen" else don't
+   let f = fromJust f'
+   if f == ',' || f == ')' then do
+    return Null
+   else if f == '[' then do
+    Quote arg1 expr2 <- parseQuoted expr
+    expr3 <- parseUntilComma expr2
+    return (Quote arg1 expr3)
+   else if f == '(' then do
+    Literal _ expr2 <- parseLiteral '(' expr
+    Expression doom
+processArgs str tail = do
+ h <- peekMaybe tail
+ definition <- getDef str
+ if isNothing h || fromJust h /= head "()" then do
+  return . process $ Token definition tail
+ else do
+  tail2 <- parseLiteral (head "()") tail
+  pushDef "$#" 0
+  pushDef "$0" str
+  tail3 <- helper 1 [head "()"] tail2
+  tail4 <- parseLiteral (head . tail $ "()") tail3
+  argCountStr <- getDef "$#"
+  result <- return . process $ Token definition tail4
+  undoArguments ((read argCountStr)::Int)
+  return result
+ tail2 <- parseLiteral (head "()") tail
+ something <- helper 1 [] [head "()"] tail2
+ where
+  helper 1 "" [] expr = return expr
+  helper argIndex argSoFar [] expr = return expr
+  helper argIndex argSoFar m@(match:matchL) expr = do
+   f <- peekMaybe expr
+   if isNothing f then do error "shouldn't happen" else don't
+   expr' <- pop expr
+   let f' = fromJust f
+   if m == "(" && (f' == ',' || f' == ')') then do
+    pushDef("$"++show (argIndex), argSoFar)
+    setDef("$#", show (argIndex))
+    helper (1+argIndex) [] (if f' == ')' then [] else match:matchL) expr'
+   else do
+    let argSoFar' = f':argSoFar
+    if f' == '(' || f' == '[' then do
+     helper argIndex argSoFar' (f':match:matchL) expr'
+    else if f' == ')' && match == '(' || f' == ']' && match == '[' then do
+     helper argIndex argSoFar' matchL expr'
+    else do
+     helper argIndex argSoFar' (match:matchL) expr'
+  undoArguments 
+
+
+-----------------------------------------
+
+data Expression =
+  Quote String Expression
+| Literal Char Expression
+| Token String Expression
+| Macro String Expression
+| Null
+
+After the first parse, everything is either Quote or Literal except for one Null at the end
+
+process Null = Null
+process (Quote expr tail) = Token (expressionToString expr) (process tail)
+process (Token expr tail) = case expr of
+ (a:aL) -> process (Literal a (Token aL tail))
+ [] -> process tail
+process (Macro str tail) = processArgs str tail
+process (Literal c tail) = tryMacro stringEmpty macroDefs (Literal c tail) (Literal c tail)
+tryMacro str macros (Literal c tail) backup
+ | Trie.null macros = process backup
+ | otherwise =
+    tryMacro
+     (append str (stringSingleton c))
+     (trieReducer (stringSingleton c) macros)
+     tail
+     (if Trie.member emptyString macros then (Macro str (Literal c tail)) else backup)
+tryMacro str macros (Quote _ _) backup = process backup
+tryMacro str macros n@(Token _ _) backup = tryMacro str macros (process n) backup
+tryMacro str macros n@(Macro _ _) backup = error "shouldn't happen"
+tryMacro str macros n@(MacroArgs _ _ _) backup = error "shouldn't happen"
+tryMacro str macros Null backup = process backup
+
+
+parseQuoted expr = do
+ Literal _ expr2 <- parseLiteral '[' expr
+ expr3Blah <- parseExpression expr2
+ let (arg3,expr3) = case expr3Blah of
+  Token stra expr3a -> (stra,expr3a)
+  Quote strb expr3b -> (strb,expr3b)
+ Literal _ expr4 <- parseLiteral ']' expr3
+ return $ Quote arg3 (parseExpression expr4)
+
+parseExpression expr = do
+ f' <- maybePeek expr
+ if isNothing f' then return Null
+ else do
+  let f = fromJust f'
+  if f == '[' then parseQuoted expr
+  else if f == ']' then return (Token [] expr)
+  else do
+   expr2 <- pop expr
+   return (Token [f] (parseExpression expr2))
+
+
+{-
+parseQuote expr = do
+ Literal _ expr2 <- parseLiteral '[' expr
+ expr3Blah <- parseExpression expr2
+ let (arg3,expr3) = case expr3Blah of
+  Token stra expr3a -> (stra,expr3a)
+  Quote strb expr3b -> (strb,expr3b)
+  Literal c expr3c -> ([c],expr3c)
+ Literal _ expr4 <- parseLiteral ']' expr3
+ return $ Quote arg3 (parseExpression expr4)
+
+parseExpression expr = do
+ f' <- maybePeek expr
+ if isNothing f' then return Null else do
+  let f = fromJust f'
+  if f == '[' then parseQuoted expr
+  else if f == ']' then return (Token [] expr)
+  else do
+   expr2 <- pop expr
+   return (Literal f (parseExpression expr2))
+-}
